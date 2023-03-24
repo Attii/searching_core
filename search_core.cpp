@@ -59,8 +59,8 @@ class SearchServer {
 
             const vector<string>& document_words = SplitIntoWordsNoStop(document);              
             for (const string& word : document_words) {
-                double word_TF = (double)count(document_words.begin(), document_words.end(), word) / document_words.size();
-                documents_[word].insert({document_id, word_TF});
+                double word_TF = 1.0 / document_words.size();
+                documents_[word][document_id] += word_TF;
             }            
         }
 
@@ -129,14 +129,18 @@ class SearchServer {
             return query_words;
         }
 
+        double ComputeWordIDF(const string& word) const {
+            return log((1.0 * documents_count_ )/ documents_.at(word).size());
+        }
+
         vector<Document> FindAllDocuments(const Query& query_words) const {
             vector<Document> result; 
             map<int,double> matched_documents; // [id, relevance]
 
             for (const string& query_word : query_words.plus_words) {
                 if (documents_.count(query_word)) {
-                    for (const auto& [id, word_TF] : documents_.at(query_word)) {
-                        double word_IDF = log((double)documents_count_ / documents_.at(query_word).size());  
+                    double word_IDF = ComputeWordIDF(query_word);
+                    for (const auto& [id, word_TF] : documents_.at(query_word)) {  
                         matched_documents[id] += word_TF * word_IDF;
                     }
                 }
