@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 #include <map>
+#include <cmath>
 
 using namespace std;
 
@@ -14,7 +15,7 @@ const int MAX_RESULT_DOCUMENT_COUNT = 5;
 
 struct Document {
     int id; 
-    int relevance;
+    double relevance;
 };
 
 
@@ -54,8 +55,12 @@ vector<string> SplitIntoWords(const string& text) {
 class SearchServer {
     public:
         void AddDocument(int document_id, const string& document) {
-            for (const string& word : SplitIntoWordsNoStop(document)) {
-                documents_[word].insert(document_id);
+            documents_count_ += 1;
+
+            const vector<string>& document_words = SplitIntoWordsNoStop(document);              
+            for (const string& word : document_words) {
+                double word_TF = (double)count(document_words.begin(), document_words.end(), word) / document_words.size();
+                documents_[word].insert({document_id, word_TF});
             }            
         }
 
@@ -84,19 +89,16 @@ class SearchServer {
         }
 
     private:
-        // struct DocumentContent {
-        //     int id = 0;
-        //     vector <string> words;
-        // }; 
-
         struct Query {
             set<string> plus_words; 
             set<string> minus_words; 
         };
 
-        map<string, set<int>> documents_;
+        map<string, map<int, double>> documents_;
 
         set<string> stop_words_;
+
+        int documents_count_ = 0;
 
         vector<string> SplitIntoWordsNoStop(const string& text) const {
             vector<string> words;
@@ -129,19 +131,20 @@ class SearchServer {
 
         vector<Document> FindAllDocuments(const Query& query_words) const {
             vector<Document> result; 
-            map<int,int> matched_documents; 
+            map<int,double> matched_documents; // [id, relevance]
 
             for (const string& query_word : query_words.plus_words) {
                 if (documents_.count(query_word)) {
-                    for (const int id : documents_.at(query_word)) {
-                        matched_documents[id] += 1;
+                    for (const auto& [id, word_TF] : documents_.at(query_word)) {
+                        double word_IDF = log((double)documents_count_ / documents_.at(query_word).size());  
+                        matched_documents[id] += word_TF * word_IDF;
                     }
                 }
             }
 
             for (const string& minus_word : query_words.minus_words) {
                 if (documents_.count(minus_word)) {
-                    for (const int id : documents_.at(minus_word)) {
+                    for (const auto& [id, word_TF]: documents_.at(minus_word)) {
                         matched_documents.erase(id);
                     }
                 }
@@ -168,8 +171,7 @@ SearchServer CreateSearchServer() {
     return server;
 }
 
-int main() {
-    
+int main() {    
     const SearchServer server = CreateSearchServer(); 
 
     const string query = ReadLine();
