@@ -88,12 +88,8 @@ class SearchServer {
                 stop_words_.insert(word);
             }
         }
-        
-        vector<Document> FindTopDocuments(const string& raw_query) const {
-            return FindTopDocuments(raw_query, [](int document_id, DocumentStatus status, int rating) { return status == DocumentStatus::ACTUAL; });
-        }
 
-        vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus search_status) const {
+        vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus search_status = DocumentStatus::ACTUAL) const {
             return FindTopDocuments(raw_query, [search_status](int document_id, DocumentStatus status, int rating) { return status == search_status; });
         }
 
@@ -103,10 +99,12 @@ class SearchServer {
         
             vector<Document> top_documents = FindAllDocuments(parsed_query, FilterDocument);
             
+            const double EPSILON = 1e-6;
+
             sort(top_documents.begin(), top_documents.end(), 
-                [](const Document& el1, const Document& el2){
+                [EPSILON](const Document& el1, const Document& el2){
                     return el1.relevance > el2.relevance || 
-                    (abs(el1.relevance - el2.relevance) < 1e-6 && el1.rating > el2.rating) ;
+                    (abs(el1.relevance - el2.relevance) < EPSILON && el1.rating > el2.rating) ;
                 });             
 
             if ( top_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
@@ -205,7 +203,8 @@ class SearchServer {
                 if (word_index_.count(query_word)) {
                     double word_IDF = ComputeWordIDF(query_word);
                     for (const auto& [id, word_TF] : word_index_.at(query_word)) {  
-                        if (CheckFilter(id, documents_.at(id).status, documents_.at(id).rating)) {
+                        DocumentData document_info = documents_.at(id); 
+                        if (CheckFilter(id, document_info.status, document_info.rating)) {
                             matched_documents[id] += word_TF * word_IDF;
                         }
                     }
