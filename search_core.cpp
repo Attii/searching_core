@@ -88,11 +88,20 @@ class SearchServer {
                 stop_words_.insert(word);
             }
         }
+        
+        vector<Document> FindTopDocuments(const string& raw_query) const {
+            return FindTopDocuments(raw_query, [](int document_id, DocumentStatus status, int rating) { return status == DocumentStatus::ACTUAL; });
+        }
 
-        vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus status = DocumentStatus::ACTUAL) const {
+        vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus search_status) const {
+            return FindTopDocuments(raw_query, [search_status](int document_id, DocumentStatus status, int rating) { return status == search_status; });
+        }
+
+        template <typename Function>
+        vector<Document> FindTopDocuments(const string& raw_query, Function FilterDocument) const {
             const Query parsed_query = ParseQuery(raw_query);
         
-            vector<Document> top_documents = FindAllDocuments(parsed_query, status);
+            vector<Document> top_documents = FindAllDocuments(parsed_query, FilterDocument);
             
             sort(top_documents.begin(), top_documents.end(), 
                 [](const Document& el1, const Document& el2){
@@ -188,14 +197,15 @@ class SearchServer {
             return log((1.0 * documents_.size() )/ word_index_.at(word).size());
         }
 
-        vector<Document> FindAllDocuments(const Query& query_words, const DocumentStatus status) const { 
+        template <typename Function>
+        vector<Document> FindAllDocuments(const Query& query_words, Function CheckFilter) const { 
             map<int,double> matched_documents; // [id, relevance]
 
             for (const string& query_word : query_words.plus_words) {
                 if (word_index_.count(query_word)) {
                     double word_IDF = ComputeWordIDF(query_word);
                     for (const auto& [id, word_TF] : word_index_.at(query_word)) {  
-                        if (documents_.at(id).status == status ) {
+                        if (CheckFilter(id, documents_.at(id).status, documents_.at(id).rating)) {
                             matched_documents[id] += word_TF * word_IDF;
                         }
                     }
@@ -212,9 +222,7 @@ class SearchServer {
 
             vector<Document> result;
             for (const auto& [id, relevance] : matched_documents) {
-                if (documents_.at(id).status == status){
-                    result.push_back({id, relevance, documents_.at(id).rating});
-                }
+                result.push_back({id, relevance, documents_.at(id).rating});
             }
 
             return result;
@@ -239,16 +247,24 @@ void PrintDocument(const Document& document) {
          << "rating = "s << document.rating
          << " }"s << endl;
 }
-
 int main() {
     SearchServer search_server;
     search_server.SetStopWords("и в на"s);
-
     search_server.AddDocument(0, "белый кот и модный ошейник"s,        DocumentStatus::ACTUAL, {8, -3});
     search_server.AddDocument(1, "пушистый кот пушистый хвост"s,       DocumentStatus::ACTUAL, {7, 2, 7});
     search_server.AddDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
-
-    for (const Document& document : search_server.FindTopDocuments("ухоженный кот"s)) {
+    search_server.AddDocument(3, "ухоженный скворец евгений"s,         DocumentStatus::BANNED, {9});
+    cout << "ACTUAL by default:"s << endl;
+    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s)) {
         PrintDocument(document);
     }
+    cout << "BANNED:"s << endl;
+    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, DocumentStatus::BANNED)) {
+        PrintDocument(document);
+    }
+    cout << "Even ids:"s << endl;
+    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, [](int document_id, DocumentStatus status, int rating) { return document_id % 2 == 0; })) {
+        PrintDocument(document);
+    }
+    return 0;
 } 
