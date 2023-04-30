@@ -31,7 +31,9 @@ struct Document {
     Document() = default; 
 
     Document(int id_p, double rel_p, int rating_p) 
-        : id(id_p), relevance(rel_p), rating(rating_p)
+        : id(id_p)
+        , relevance(rel_p)
+        , rating(rating_p)
     {
     } 
 }; 
@@ -81,35 +83,10 @@ vector<string> SplitIntoWords(const string& text) {
     return words;
 }
 
-bool ContainsSpecialSymbols(const string& text) {
-    for(const char c : text) {
-        if (c >= 0 && c <= 31) {
-            return true;
-        }
-    }
-    return false;
-}
-
 class SearchServer {
     public:
         explicit SearchServer(const string& stop_words_set) {
-            if (ContainsSpecialSymbols(stop_words_set)) {
-                throw invalid_argument("Stop words can't contain special symbols"s);
-            }
-            string word;
-            for (const char c : stop_words_set) {
-                if (c == ' ') {
-                    if (!word.empty()) {
-                        stop_words_.insert(word);
-                        word.clear();
-                    }
-                } else {
-                    word += c;
-                }
-            }
-            if (!word.empty()) {
-                stop_words_.insert(word);
-            }
+            SearchServer(SplitIntoWords(stop_words_set));
         }
 
         template <typename T>
@@ -139,10 +116,6 @@ class SearchServer {
                 throw invalid_argument("You cannot add the same document ID"s);
             }
 
-            if (ContainsSpecialSymbols(document)) {
-                throw invalid_argument("Document can't contain special symbols"s);
-            }
-
             const vector<string>& document_words = SplitIntoWordsNoStop(document);              
             for (const string& word : document_words) {
                 double word_TF = 1.0 / document_words.size();
@@ -162,15 +135,7 @@ class SearchServer {
 
         template <typename Function>
         vector<Document> FindTopDocuments(const string& raw_query, Function FilterDocument) const {
-            if(ContainsSpecialSymbols(raw_query)) {
-                throw invalid_argument("Query can't contain special symbols"s);
-            }
-
             Query parsed_query = ParseQuery(raw_query);
-            try {
-            } catch (const invalid_argument& error) {
-                cerr << error.what() << endl;
-            }
         
             vector<Document> top_documents = FindAllDocuments(parsed_query, FilterDocument);
             
@@ -195,15 +160,7 @@ class SearchServer {
 
         // Full result with matched words from document with status(if query contains minus words, function returns empty vector)
         tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
-            if(ContainsSpecialSymbols(raw_query)) {
-                throw invalid_argument("Query can't contain special symbols"s);
-            }
-
             Query parsed_query = ParseQuery(raw_query);
-            try {
-            } catch (const invalid_argument& error) {
-                cerr << error.what() << endl;
-            }
 
             vector<string> matched_words; 
 
@@ -256,7 +213,19 @@ class SearchServer {
 
         set<string> stop_words_;
 
+        static bool ContainsSpecialSymbols(const string& text) {
+            for(const char c : text) {
+                if (c >= 0 && c <= 31) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         vector<string> SplitIntoWordsNoStop(const string& text) const {
+            if (ContainsSpecialSymbols(text)) {
+                throw invalid_argument("Special symbols cannot be used in text.");
+            }
             vector<string> words;
             for (const string& word : SplitIntoWords(text)) {
                 if (stop_words_.count(word) == 0) {
