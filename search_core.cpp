@@ -85,8 +85,9 @@ vector<string> SplitIntoWords(const string& text) {
 
 class SearchServer {
     public:
-        explicit SearchServer(const string& stop_words_set) {
-            SearchServer(SplitIntoWords(stop_words_set));
+        explicit SearchServer(const string& stop_words_set)
+            :   SearchServer(SplitIntoWords(stop_words_set))
+        {
         }
 
         template <typename T>
@@ -180,7 +181,7 @@ class SearchServer {
         }
 
         int GetDocumentId(int index) const {
-            if (index < 0 || index > GetDocumentCount()) {
+            if (index < 0 || index >= GetDocumentCount()) {
                 throw out_of_range("Index is out of documents range."s); 
             }
 
@@ -371,6 +372,90 @@ void PrintDocument(const Document& document) {
          << "relevance = "s << document.relevance << ", "s
          << "rating = "s << document.rating << " }"s << endl;
 }
-int main() {
+
+template <typename It>
+class IteratorRange {
+    public:
+        explicit IteratorRange(It begin_it, It end_it)
+            : begin_it_(begin_it)
+            , end_it_(end_it) 
+        {            
+        }
     
+        It begin() {
+            return begin_it_;
+        }
+
+        It end() {
+            return end_it_;
+        }
+
+        size_t size() {
+            return distance (begin_it_, end_it_);
+        }
+    
+    private:
+        It begin_it_;
+        It end_it_;
+};
+
+template <typename It>
+class Paginator {
+    public:
+        Paginator(It begin_it, It end_it, size_t page_size) {
+            for (auto iter = begin_it; iter != end_it; advance(iter, min(page_size, static_cast<size_t>(distance(iter, end_it))))) {
+                auto page_start = iter;
+                auto page_end = next(iter, min(page_size, static_cast<size_t>(distance(iter, end_it))));;
+                pages_.push_back(IteratorRange(page_start, page_end));
+            }
+        }
+    
+        typename vector<IteratorRange<It>>::const_iterator begin() const {
+            return pages_.begin();
+        }
+
+        typename vector<IteratorRange<It>>::const_iterator end() const {
+            return pages_.end();
+        }
+
+        typename vector<IteratorRange<It>>::const_iterator size() const {
+            return pages_.size();
+        }
+
+    private:
+        vector<IteratorRange<It>> pages_;
+};
+
+ostream& operator<<(ostream& output, Document  doc) {
+    output << "{ document_id = " << doc.id << ", relevance = " << doc.relevance << ", rating = " << doc.rating << " }";
+    return output;
 }
+
+template <typename It>
+ostream& operator<<(ostream& out, IteratorRange<It> page) {
+    for (auto it = page.begin(); it != page.end(); ++it) {
+        out << *it;
+    }
+    return out;
+}
+
+template <typename Container>
+auto Paginate(const Container& c, size_t page_size) {
+    return Paginator(begin(c), end(c), page_size);
+}
+int main() {
+    SearchServer search_server("and with"s);
+    search_server.AddDocument(1, "funny pet and nasty rat"s, DocumentStatus::ACTUAL, {7, 2, 7});
+    search_server.AddDocument(2, "funny pet with curly hair"s, DocumentStatus::ACTUAL, {1, 2, 3});
+    search_server.AddDocument(3, "big cat nasty hair"s, DocumentStatus::ACTUAL, {1, 2, 8});
+    search_server.AddDocument(4, "big dog cat Vladislav"s, DocumentStatus::ACTUAL, {1, 3, 2});
+    search_server.AddDocument(5, "big dog hamster Borya"s, DocumentStatus::ACTUAL, {1, 1, 1});
+    const auto search_results = search_server.FindTopDocuments("curly dog"s);
+    int page_size = 2;
+    const auto pages = Paginate(search_results, page_size);
+    // Выводим найденные документы по страницам
+    for (auto page = pages.begin(); page != pages.end(); ++page) {
+        cout << *page << endl;
+        cout << "Page break"s << endl;
+    }
+} 
