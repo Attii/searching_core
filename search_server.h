@@ -23,6 +23,11 @@ class SearchServer {
         template <typename T>
         explicit SearchServer(const T& stop_words_set);
 
+        std::set<int>::iterator begin();
+        std::set<int>::const_iterator begin() const;
+        std::set<int>::iterator end();
+        std::set<int>::const_iterator end() const;
+
         // Defines an invalid document id
         // You can refer to this constant as SearchServer::INVALID_DOCUMENT_ID
         inline static constexpr int INVALID_DOCUMENT_ID = -1;
@@ -41,7 +46,9 @@ class SearchServer {
         // Full result with matched words from document with status(if query contains minus words, function returns empty vector)
         std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
 
-        int GetDocumentId(int index) const;
+        void RemoveDocument(int document_id);
+
+        const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
 
     private:
         struct Query {
@@ -56,7 +63,10 @@ class SearchServer {
 
         std::map<int,DocumentData> documents_;
 
-        std::map<std::string, std::map<int, double>> word_index_; // word : document index : word term frequency in document
+        std::set<int> documents_id_;
+
+        std::map<std::string, std::map<int, double>> word_to_document_index_; // word : document index : word term frequency in document
+        std::map<int, std::map<std::string, double>> document_to_word_index_; 
 
         std::set<std::string> stop_words_;
 
@@ -114,9 +124,9 @@ std::vector<Document> SearchServer::FindAllDocuments(const Query& query_words, F
     std::map<int,double> matched_documents; // [id, relevance]
 
     for (const std::string& query_word : query_words.plus_words) {
-        if (word_index_.count(query_word)) {
+        if (word_to_document_index_.count(query_word)) {
             double word_IDF = ComputeWordIDF(query_word);
-            for (const auto& [id, word_TF] : word_index_.at(query_word)) {  
+            for (const auto& [id, word_TF] : word_to_document_index_.at(query_word)) {  
                 DocumentData document_info = documents_.at(id); 
                 if (CheckFilter(id, document_info.status, document_info.rating)) {
                     matched_documents[id] += word_TF * word_IDF;
@@ -126,8 +136,8 @@ std::vector<Document> SearchServer::FindAllDocuments(const Query& query_words, F
     }
 
     for (const std::string& minus_word : query_words.minus_words) {
-        if (word_index_.count(minus_word)) {
-            for (const auto& [id, word_TF]: word_index_.at(minus_word)) {
+        if (word_to_document_index_.count(minus_word)) {
+            for (const auto& [id, word_TF]: word_to_document_index_.at(minus_word)) {
                 matched_documents.erase(id);
             }
         }

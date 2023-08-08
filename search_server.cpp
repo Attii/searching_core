@@ -1,8 +1,24 @@
 #include "search_server.h"
 
+std::set<int>::iterator SearchServer::begin() {
+    return documents_id_.begin();
+}
+
+std::set<int>::const_iterator SearchServer::begin() const{
+    return documents_id_.begin();
+}
+
+std::set<int>::iterator SearchServer::end() {
+    return documents_id_.end();
+}
+
+std::set<int>::const_iterator SearchServer::end() const{
+    return documents_id_.end();
+}
+
 void SearchServer::AddDocument(int document_id, const std::string& document, DocumentStatus status, const std::vector<int>& ratings) {
     if (document_id < 0) {
-        throw std::invalid_argument("Document ID can't be negative.");
+        throw std::invalid_argument("Document ID can't be negative");
     }
 
     if (documents_.count(document_id)) {
@@ -12,9 +28,11 @@ void SearchServer::AddDocument(int document_id, const std::string& document, Doc
     const std::vector<std::string>& document_words = SplitIntoWordsNoStop(document);              
     for (const std::string& word : document_words) {
         double word_TF = 1.0 / document_words.size();
-        word_index_[word][document_id] += word_TF;
+        word_to_document_index_[word][document_id] += word_TF;
+        document_to_word_index_[document_id][word] += word_TF;
     }     
 
+    documents_id_.insert(document_id);
     documents_[document_id] = {ComputeAverageRating(ratings), status};   
 }
 
@@ -36,35 +54,18 @@ std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument
     std::vector<std::string> matched_words; 
 
     for (const std::string& word : parsed_query.minus_words) {
-        if (word_index_.count(word) && word_index_.at(word).count(document_id)) {
+        if (word_to_document_index_.count(word) && word_to_document_index_.at(word).count(document_id)) {
             return std::tuple(matched_words, documents_.at(document_id).status);
         }
     }
 
     for (const std::string& word : parsed_query.plus_words) {
-        if (word_index_.count(word) && word_index_.at(word).count(document_id)) {
+        if (word_to_document_index_.count(word) && word_to_document_index_.at(word).count(document_id)) {
             matched_words.push_back(word);
         }
     }
 
     return std::tuple(matched_words, documents_.at(document_id).status);
-}
-
-int SearchServer::GetDocumentId(int index) const {
-    if (index < 0 || index >= GetDocumentCount()) {
-        throw std::out_of_range("Index is out of documents range."); 
-    }
-
-    int id = 0;
-    for (const auto& [doc_id, data] : documents_){ 
-        if (index == 0) {
-            id = doc_id;
-            break;
-        }
-        index--;
-    }
-
-    return id;
 }
 
 bool SearchServer::ContainsSpecialSymbols(const std::string& text) {
@@ -122,6 +123,26 @@ int SearchServer::ComputeAverageRating(const std::vector<int>& ratings) {
 }
 
 double SearchServer::ComputeWordIDF(const std::string& word) const {
-    return std::log((1.0 * documents_.size() )/ word_index_.at(word).size());
+    return std::log((1.0 * documents_.size() )/ word_to_document_index_.at(word).size());
 }
 
+const std::map<std::string, double>& SearchServer::GetWordFrequencies(int document_id) const {
+    static const std::map<std::string, double> blank_word_frequencies;
+
+    if(document_to_word_index_.count(document_id)) {
+        return document_to_word_index_.at(document_id);
+    } 
+
+    return blank_word_frequencies;
+}
+
+void SearchServer::RemoveDocument(int document_id) {
+    documents_.erase(document_id);
+
+    for (const auto& [word, word_TF] : document_to_word_index_.at(document_id)) {
+        word_to_document_index_.erase(word);
+    }
+
+    document_to_word_index_.erase(document_id);
+    documents_id_.erase(document_id);
+}
