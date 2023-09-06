@@ -7,25 +7,30 @@
 #include "search_server.h"
 #include "request_queue.h"
 #include "remove_duplicates.h"
+#include "process_queries.h"
 
-using namespace std::string_literals;
-
+using namespace std;
 int main() {
     SearchServer search_server("and with"s);
-    RequestQueue request_queue(search_server);
-    search_server.AddDocument(1, "funny pet and nasty rat"s, DocumentStatus::ACTUAL, {7, 2, 7});
-    search_server.AddDocument(2, "funny pet with curly hair"s, DocumentStatus::ACTUAL, {1, 2, 3});
-    search_server.AddDocument(3, "funny pet with curly hair"s, DocumentStatus::ACTUAL, {1, 2, 8});
-    search_server.AddDocument(4, "funny pet and curly hair"s, DocumentStatus::ACTUAL, {1, 3, 2});
-    search_server.AddDocument(5, "funny funny pet and nasty nasty rat"s, DocumentStatus::ACTUAL, {1, 1, 1});
-    search_server.AddDocument(6, "funny pet and not very nasty rat"s, DocumentStatus::ACTUAL, {1, 1, 1});
-    search_server.AddDocument(7, "very nasty rat and not very funny pet"s, DocumentStatus::ACTUAL, {1, 1, 1});
-    search_server.AddDocument(8, "pet with rat and rat and rat"s, DocumentStatus::ACTUAL, {1, 1, 1});
-    search_server.AddDocument(9, "nasty rat with curly hair"s, DocumentStatus::ACTUAL, {1, 1, 1});
-    
-    std::cout << "Before duplicates removed: "s << search_server.GetDocumentCount() << std::endl;
-    RemoveDuplicates(search_server);
-    std::cout << "After duplicates removed: "s << search_server.GetDocumentCount() << std::endl;
-
+    int id = 0;
+    for (
+        const string& text : {
+            "funny pet and nasty rat"s,
+            "funny pet with curly hair"s,
+            "funny pet and not very nasty rat"s,
+            "pet with rat and rat and rat"s,
+            "nasty rat with curly hair"s,
+        }
+    ) {
+        search_server.AddDocument(++id, text, DocumentStatus::ACTUAL, {1, 2});
+    }
+    const vector<string> queries = {
+        "nasty rat -not"s,
+        "not very funny nasty pet"s,
+        "curly hair"s
+    };
+    for (const Document& document : ProcessQueriesJoined(search_server, queries)) {
+        cout << "Document "s << document.id << " matched with relevance "s << document.relevance << endl;
+    }
     return 0;
-}
+} 

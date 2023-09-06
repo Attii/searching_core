@@ -3,8 +3,8 @@ CFLAFGS=-c -Wall
 
 all: main
 
-main: main.o document.o read_input_functions.o search_server.o string_processing.o request_queue.o remove_duplicates.o
-	$(CC) main.o document.o read_input_functions.o search_server.o string_processing.o request_queue.o remove_duplicates.o -o main
+main: main.o document.o read_input_functions.o search_server.o string_processing.o request_queue.o remove_duplicates.o process_queries.o
+	$(CC) main.o document.o read_input_functions.o search_server.o string_processing.o request_queue.o remove_duplicates.o process_queries.o -o main
 
 main.o: main.cpp
 	$(CC) $(CFLAFGS) main.cpp
@@ -26,6 +26,9 @@ request_queue.o: request_queue.cpp
 
 remove_duplicates.o: remove_duplicates.cpp
 	$(CC) $(CFLAFGS) remove_duplicates.cpp
+
+process_queries.o: process_queries.cpp
+	$(CC) $(CFLAFGS) process_queries.cpp
 	
 clean:
 	rm -rf *.o main
