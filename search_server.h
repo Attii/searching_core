@@ -8,6 +8,8 @@
 #include <math.h>
 #include <numeric>
 #include <algorithm>
+#include <execution>
+#include <vector>
 
 #include "string_processing.h"
 #include "document.h"
@@ -45,15 +47,21 @@ class SearchServer {
 
         // Full result with matched words from document with status(if query contains minus words, function returns empty vector)
         std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
+        std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(std::execution::sequenced_policy policy, 
+                                                                            const std::string& raw_query, int document_id) const;
+        std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(std::execution::parallel_policy policy, 
+                                                                            const std::string& raw_query, int document_id) const;
 
         void RemoveDocument(int document_id);
+        void RemoveDocument(std::execution::sequenced_policy policy, int document_id);
+        void RemoveDocument(std::execution::parallel_policy policy, int document_id);
 
         const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
 
     private:
         struct Query {
-            std::set<std::string> plus_words; 
-            std::set<std::string> minus_words; 
+            std::vector<std::string> plus_words; 
+            std::vector<std::string> minus_words; 
         };
 
         struct DocumentData {
@@ -65,8 +73,8 @@ class SearchServer {
 
         std::set<int> documents_id_;
 
-        std::map<std::string, std::map<int, double>> word_to_document_index_; // word : document index : word term frequency in document
-        std::map<int, std::map<std::string, double>> document_to_word_index_; 
+        std::map<std::string, std::map<int, double>> word_to_document_index_; // word : (document index : word term frequency in document)
+        std::map<int, std::map<std::string, double>> document_to_word_index_; // document index : (word : word term frequency in document)
 
         std::set<std::string> stop_words_;
 
@@ -74,7 +82,7 @@ class SearchServer {
 
         std::vector<std::string> SplitIntoWordsNoStop(const std::string& text) const;
 
-        Query ParseQuery(const std::string& text) const;
+        Query ParseQuery(const std::string& text, bool do_sort = false) const;
 
         static int ComputeAverageRating(const std::vector<int>& ratings);
 
@@ -100,7 +108,7 @@ SearchServer::SearchServer(const T& stop_words_set) {
 
 template <typename Function>
 std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query, Function FilterDocument) const {
-    Query parsed_query = ParseQuery(raw_query);
+    Query parsed_query = ParseQuery(raw_query, true);
 
     std::vector<Document> top_documents = FindAllDocuments(parsed_query, FilterDocument);
     
